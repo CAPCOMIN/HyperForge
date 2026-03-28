@@ -511,7 +511,7 @@ export const repositories = {
     );
   },
 
-  getRunDetail(runId: string): RunDetail | null {
+  getRunDetail(runId: string): Omit<RunDetail, "deliverables"> | null {
     const run = this.getRun(runId);
 
     if (!run) {

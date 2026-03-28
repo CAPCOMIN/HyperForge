@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { MarkdownContent } from "@/components/MarkdownContent";
+import { RunDeliverablesPanel } from "@/components/RunDeliverablesPanel";
 import { useLocale } from "@/components/providers/locale-provider";
 import type { MessageKey } from "@/lib/i18n/messages";
 import type { AgentExecution, RunDetail, SubTask } from "@/lib/types/domain";
 import { cn } from "@/lib/utils/cn";
 
-type InspectorTab = "overview" | "plan" | "assets" | "timeline";
+type InspectorTab = "deliverables" | "overview" | "plan" | "assets" | "timeline";
 
 type ConversationMessage = {
   id: string;
@@ -450,7 +451,7 @@ export function RunDetailClient({
   const { t, formatDateTime, formatRelativeDuration } = useLocale();
   const [detail, setDetail] = useState(initialDetail);
   const [pollError, setPollError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<InspectorTab>("overview");
+  const [activeTab, setActiveTab] = useState<InspectorTab>("deliverables");
 
   useEffect(() => {
     if (isTerminal(detail.run.status)) {
@@ -502,6 +503,7 @@ export function RunDetailClient({
     (event) => event.title === "Task plan normalized"
   );
   const inspectorTabs: Array<{ id: InspectorTab; label: string }> = [
+    { id: "deliverables", label: t("runDeliverables") },
     { id: "overview", label: t("runOverview") },
     { id: "plan", label: t("runPlan") },
     { id: "assets", label: t("runAssets") },
@@ -712,8 +714,12 @@ export function RunDetailClient({
                 className={cn(
                   "rounded-full px-3 py-2 text-sm transition",
                   activeTab === tab.id
-                    ? "bg-ink text-white"
-                    : "bg-mist text-steel hover:text-ink"
+                    ? tab.id === "deliverables"
+                      ? "bg-accent text-white shadow-[0_10px_28px_rgba(34,108,255,0.24)]"
+                      : "bg-ink text-white"
+                    : tab.id === "deliverables"
+                      ? "bg-accent/8 text-accent hover:bg-accent/12"
+                      : "bg-mist text-steel hover:text-ink"
                 )}
               >
                 {tab.label}
@@ -722,6 +728,10 @@ export function RunDetailClient({
           </div>
 
           <div className="mt-5">
+            {activeTab === "deliverables" ? (
+              <RunDeliverablesPanel bundle={detail.deliverables} />
+            ) : null}
+
             {activeTab === "overview" ? (
               <div className="space-y-4">
                 <div className="grid gap-3 sm:grid-cols-2">

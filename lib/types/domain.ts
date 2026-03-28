@@ -166,6 +166,32 @@ export interface RunEvent {
   createdAt: string;
 }
 
+export interface RunDeliverableItem {
+  id: string;
+  title: string;
+  description: string;
+  filename: string;
+  kind: "document" | "code" | "json";
+  previewFormat: "markdown" | "code" | "json" | "text" | "none";
+  mimeType: string;
+  byteSize: number;
+  createdAt: string;
+  isPrimary: boolean;
+  sourceAgents: AgentRole[];
+  previewUrl: string;
+  downloadUrl: string;
+}
+
+export interface RunDeliverableBundle {
+  status: "pending" | "ready" | "unavailable";
+  title: string;
+  description: string;
+  outputDir: string | null;
+  generatedAt: string | null;
+  primaryDeliverableId: string | null;
+  items: RunDeliverableItem[];
+}
+
 export interface RunDetail {
   run: TaskRun;
   subtasks: SubTask[];
@@ -175,6 +201,7 @@ export interface RunDetail {
   recipe: RecipeDraft | null;
   organism: OrganismRun | null;
   timeline: RunEvent[];
+  deliverables: RunDeliverableBundle;
 }
 
 export interface TaskPlan {

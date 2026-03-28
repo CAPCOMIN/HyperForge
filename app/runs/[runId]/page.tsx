@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { RunDetailClient } from "@/components/RunDetailClient";
-import { repositories } from "@/lib/persistence/repositories";
+import { getRunDetail } from "@/lib/runs/get-run-detail";
 
 export default async function RunDetailPage({
   params
@@ -10,7 +10,7 @@ export default async function RunDetailPage({
   }>;
 }) {
   const { runId } = await params;
-  const detail = repositories.getRunDetail(runId);
+  const detail = getRunDetail(runId);
 
   if (!detail) {
     notFound();

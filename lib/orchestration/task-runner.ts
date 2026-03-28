@@ -11,11 +11,13 @@ import type {
 import { buildCapsuleDraft } from "@/lib/genes/capsule-builder";
 import { buildGeneDraft } from "@/lib/genes/gene-builder";
 import { composeRecipeDraft } from "@/lib/genes/recipe-composer";
+import { writeRunDeliverables } from "@/lib/deliverables";
 import { createRecipeAndPublish, expressRecipe } from "@/lib/evomap/recipe";
 import { publishAssets, toDraftPublishStatus } from "@/lib/evomap/publish";
 import { sanitizeTaskPlan, sortSubtasksByDependency } from "@/lib/orchestration/task-dag";
 import { assertRunTransition } from "@/lib/orchestration/run-state-machine";
 import { repositories } from "@/lib/persistence/repositories";
+import { getRunDetail } from "@/lib/runs/get-run-detail";
 import { env } from "@/lib/utils/env";
 import { createId, createNodeId } from "@/lib/utils/ids";
 import { nowIso } from "@/lib/utils/time";
@@ -419,8 +421,32 @@ async function executeDemoRun(
         : "Master orchestrator completed the Minimax-backed closed-loop demo: DAG execution, Gene/Capsule drafting, EvoMap integration, recipe creation, and organism expression."
       : "Master orchestrator completed the closed-loop demo: DAG execution, Gene/Capsule drafting, EvoMap publish, recipe creation, and organism expression.";
   repositories.updateRun(run);
+  const finalDetail = repositories.getRunDetail(runId);
 
-  return repositories.getRunDetail(runId) as RunDetail;
+  if (finalDetail) {
+    writeRunDeliverables({
+      ...finalDetail,
+      deliverables: {
+        status: "pending",
+        title: "Final Deliverables",
+        description: "",
+        outputDir: null,
+        generatedAt: null,
+        primaryDeliverableId: null,
+        items: []
+      }
+    });
+    repositories.addRunEvent({
+      id: createId("event"),
+      runId,
+      title: "Final deliverables generated",
+      detail:
+        "Final handoff files were assembled from Analyst, Builder, and Validator outputs and saved for preview/download.",
+      createdAt: nowIso()
+    });
+  }
+
+  return getRunDetail(runId) as RunDetail;
 }
 
 export async function runDemoTask(

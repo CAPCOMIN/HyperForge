@@ -1,24 +1,54 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
+import { useState, useTransition } from "react";
 import { useLocale } from "@/components/providers/locale-provider";
 import { cn } from "@/lib/utils/cn";
 
-export function AppHeader() {
+export function AppHeader({
+  sessionUser
+}: {
+  sessionUser: {
+    username: string;
+    displayName: string;
+  } | null;
+}) {
   const pathname = usePathname();
+  const router = useRouter();
   const { locale, setLocale, t } = useLocale();
+  const [isPending, startTransition] = useTransition();
+  const [logoutError, setLogoutError] = useState<string | null>(null);
 
-  const links = [
-    {
-      href: "/" as const,
-      label: t("navWorkspace")
-    },
-    {
-      href: "/dashboard" as const,
-      label: t("navDashboard")
+  const links = sessionUser
+    ? [
+        {
+          href: "/" as const,
+          label: t("navWorkspace")
+        },
+        {
+          href: "/dashboard" as const,
+          label: t("navDashboard")
+        }
+      ]
+    : [];
+
+  async function handleLogout() {
+    setLogoutError(null);
+    const response = await fetch("/api/auth/logout", {
+      method: "POST"
+    });
+
+    if (!response.ok) {
+      setLogoutError(t("logoutError"));
+      return;
     }
-  ];
+
+    startTransition(() => {
+      router.replace("/login");
+      router.refresh();
+    });
+  }
 
   return (
     <header className="sticky top-0 z-50 border-b border-line/60 bg-white/85 backdrop-blur-xl">
@@ -66,6 +96,35 @@ export function AppHeader() {
         </div>
 
         <div className="flex items-center gap-3">
+          {sessionUser ? (
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="rounded-full border border-line/70 bg-mist/80 px-3 py-2 text-right sm:px-4">
+                <div className="whitespace-nowrap text-xs font-semibold tracking-tight text-ink sm:text-sm">
+                  <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-steel/75">
+                    {t("headerSignedIn")}
+                  </span>
+                  <span className="mx-2 text-steel/45">/</span>
+                  <span>{sessionUser.displayName}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={isPending}
+                className="rounded-full border border-line bg-white px-3 py-2 text-xs font-medium text-steel transition hover:border-accent/30 hover:text-ink disabled:cursor-not-allowed disabled:opacity-60 sm:px-4 sm:text-sm"
+              >
+                {isPending ? t("logoutSubmitting") : t("logoutAction")}
+              </button>
+            </div>
+          ) : (
+            <Link
+              href="/login"
+              className="hidden rounded-full border border-line bg-white px-4 py-2 text-sm font-medium text-steel transition hover:border-accent/30 hover:text-ink md:inline-flex"
+            >
+              {t("loginNav")}
+            </Link>
+          )}
+
           <div className="hidden text-xs text-steel/70 sm:block">
             {t("languageLabel")}
           </div>
@@ -88,6 +147,11 @@ export function AppHeader() {
           </div>
         </div>
       </div>
+      {logoutError ? (
+        <div className="mx-auto w-full max-w-[1560px] px-4 pb-3 text-right text-xs text-warning sm:px-6">
+          {logoutError}
+        </div>
+      ) : null}
     </header>
   );
 }

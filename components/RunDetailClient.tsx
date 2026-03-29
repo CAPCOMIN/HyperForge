@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { MarkdownContent } from "@/components/MarkdownContent";
 import { RunDeliverablesPanel } from "@/components/RunDeliverablesPanel";
 import { useLocale } from "@/components/providers/locale-provider";
+import { toPublicEvoMapAssetUrl } from "@/lib/evomap/links";
 import type { MessageKey } from "@/lib/i18n/messages";
 import type { AgentExecution, RunDetail, SubTask } from "@/lib/types/domain";
 import { cn } from "@/lib/utils/cn";
@@ -20,6 +21,12 @@ type ConversationMessage = {
   metadata?: string[];
   artifacts?: Record<string, unknown>;
   codeSnippet?: string | null;
+  assetEntries?: Array<{
+    kind: "Gene" | "Capsule";
+    summary: string;
+    publishStatus: string;
+    assetId: string;
+  }>;
 };
 
 function isTerminal(status: RunDetail["run"]["status"]) {
@@ -193,6 +200,43 @@ function buildRecipeMarkdown(
   return lines.join("\n\n");
 }
 
+function buildAssetReference(
+  assetId: string,
+  publishStatus: string,
+  t: ReturnType<typeof useLocale>["t"]
+) {
+  if (publishStatus === "published") {
+    const href = toPublicEvoMapAssetUrl(assetId);
+    return {
+      href,
+      helper: t("runAssetPublishedLink"),
+      helperTone: "text-accent"
+    };
+  }
+
+  if (publishStatus === "failed") {
+    return {
+      href: null,
+      helper: t("runAssetPublishFailed"),
+      helperTone: "text-warning"
+    };
+  }
+
+  if (publishStatus === "mock-published") {
+    return {
+      href: null,
+      helper: t("runAssetMockPending"),
+      helperTone: "text-steel"
+    };
+  }
+
+  return {
+    href: null,
+    helper: t("runAssetPublishingPending"),
+    helperTone: "text-steel"
+  };
+}
+
 function buildConversation(
   detail: RunDetail,
   t: ReturnType<typeof useLocale>["t"]
@@ -255,22 +299,25 @@ function buildConversation(
         id: `asset-${subtask.id}`,
         actor: "platform",
         title: t("runMessageCapabilityTitle"),
-        content: [
+        content: "",
+        assetEntries: [
           gene
-            ? `### ${t("runAssetGene")}
-- ${t("runAssetSummary")}: ${gene.summary}
-- ${t("runStatusPanel")}: ${gene.publishStatus}
-- ${t("runAssetId")}: ${gene.assetId}`
-            : "",
+            ? {
+                kind: "Gene" as const,
+                summary: gene.summary,
+                publishStatus: gene.publishStatus,
+                assetId: gene.assetId
+              }
+            : null,
           capsule
-            ? `### ${t("runAssetCapsule")}
-- ${t("runAssetSummary")}: ${capsule.summary}
-- ${t("runStatusPanel")}: ${capsule.publishStatus}
-- ${t("runAssetId")}: ${capsule.assetId}`
-            : ""
-        ]
-          .filter(Boolean)
-          .join("\n\n")
+            ? {
+                kind: "Capsule" as const,
+                summary: capsule.summary,
+                publishStatus: capsule.publishStatus,
+                assetId: capsule.assetId
+              }
+            : null
+        ].filter(Boolean) as ConversationMessage["assetEntries"]
       });
     }
   }
@@ -285,6 +332,38 @@ function buildConversation(
   }
 
   return messages;
+}
+
+function AssetReference({
+  assetId,
+  publishStatus
+}: {
+  assetId: string;
+  publishStatus: string;
+}) {
+  const { t } = useLocale();
+  const reference = buildAssetReference(assetId, publishStatus, t);
+
+  if (reference.href) {
+    return (
+      <div className="mt-3">
+        <a
+          href={reference.href}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center rounded-full border border-accent/20 bg-accent/5 px-3 py-1.5 text-xs font-medium text-accent transition hover:bg-accent/10"
+        >
+          {t("runAssetOpenLink")}
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <p className={cn("mt-3 text-xs", reference.helperTone)}>
+      {reference.helper}
+    </p>
+  );
 }
 
 function ExecutionArtifacts({
@@ -389,12 +468,51 @@ function MessageCard({ message }: { message: ConversationMessage }) {
               </div>
             ) : null}
 
-            <div className={cn("mt-4", tone.prose)}>
-              <MarkdownContent
-                content={message.content}
-                className={message.actor === "user" ? "text-white" : ""}
-              />
-            </div>
+            {message.assetEntries && message.assetEntries.length > 0 ? (
+              <div className="mt-4 space-y-3">
+                {message.assetEntries.map((entry) => (
+                  <div
+                    key={`${message.id}-${entry.kind}`}
+                    className="rounded-2xl border border-white/60 bg-white/70 p-4"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent">
+                          {entry.kind}
+                        </p>
+                        <p className="mt-2 text-sm leading-6 text-steel">
+                          {entry.summary}
+                        </p>
+                      </div>
+                      <span
+                        className={cn(
+                          "rounded-full px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.14em]",
+                          publishStatusTone(entry.publishStatus)
+                        )}
+                      >
+                        {entry.publishStatus}
+                      </span>
+                    </div>
+                    <div className="mt-3">
+                      <div className="text-xs font-medium uppercase tracking-[0.14em] text-steel/70">
+                        {t("runAssetId")}
+                      </div>
+                      <AssetReference
+                        assetId={entry.assetId}
+                        publishStatus={entry.publishStatus}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className={cn("mt-4", tone.prose)}>
+                <MarkdownContent
+                  content={message.content}
+                  className={message.actor === "user" ? "text-white" : ""}
+                />
+              </div>
+            )}
 
             {message.codeSnippet ? (
               <div className="mt-5">
@@ -832,7 +950,10 @@ export function RunDetailClient({
                         {gene.publishStatus}
                       </span>
                     </div>
-                    <p className="mt-3 break-all text-xs text-steel/80">{gene.assetId}</p>
+                    <AssetReference
+                      assetId={gene.assetId}
+                      publishStatus={gene.publishStatus}
+                    />
                   </article>
                 ))}
 
@@ -859,9 +980,10 @@ export function RunDetailClient({
                         {capsule.publishStatus}
                       </span>
                     </div>
-                    <p className="mt-3 break-all text-xs text-steel/80">
-                      {capsule.assetId}
-                    </p>
+                    <AssetReference
+                      assetId={capsule.assetId}
+                      publishStatus={capsule.publishStatus}
+                    />
                   </article>
                 ))}
 

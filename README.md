@@ -76,6 +76,10 @@ EVOMAP_AUTO_HELLO=true
 EVOMAP_NODE_ID=
 EVOMAP_NODE_SECRET=
 EVOMAP_MODEL_NAME=gpt-5
+AUTH_BOOTSTRAP_USERNAME=
+AUTH_BOOTSTRAP_PASSWORD=
+AUTH_BOOTSTRAP_DISPLAY_NAME=
+AUTH_SESSION_SECRET=
 DATABASE_URL=file:./data/hyperforge.db
 ```
 
@@ -115,7 +119,7 @@ pnpm build
 ## Demo Flow
 
 1. Open the home page
-2. Pick a sample task or enter your own
+2. Enter your own task
 3. Choose `mock` or `live`
 4. Start the run
 5. Inspect the run page:

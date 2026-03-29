@@ -331,20 +331,25 @@ async function executeDemoRun(
         capsule.publishStatus = toDraftPublishStatus(mode, true);
         const publishedGene = publishResult.publishedAssets.find((asset) => asset.type === "Gene");
         const publishedCapsule = publishResult.publishedAssets.find((asset) => asset.type === "Capsule");
+        const publishDetail =
+          mode === "live"
+            ? [
+                publishedGene?.assetId
+                  ? `Gene: ${toEvoMapAssetUrl(publishedGene.assetId)}`
+                  : null,
+                publishedCapsule?.assetId
+                  ? `Capsule: ${toEvoMapAssetUrl(publishedCapsule.assetId)}`
+                  : null
+              ]
+                .filter(Boolean)
+                .join(" | ")
+            : "Local mode run. Public EvoMap asset links are not generated yet.";
+
         repositories.addRunEvent({
           id: createId("event"),
           runId,
           title: "Assets published",
-          detail: [
-            publishedGene?.assetId
-              ? `Gene: ${toEvoMapAssetUrl(publishedGene.assetId)}`
-              : null,
-            publishedCapsule?.assetId
-              ? `Capsule: ${toEvoMapAssetUrl(publishedCapsule.assetId)}`
-              : null
-          ]
-            .filter(Boolean)
-            .join(" | "),
+          detail: publishDetail,
           createdAt: nowIso()
         });
       } catch (error) {

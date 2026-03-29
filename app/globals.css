@@ -4,7 +4,38 @@
 
 :root {
   color-scheme: light;
+  --color-ink: 17 17 17;
+  --color-steel: 51 65 85;
+  --color-mist: 238 242 247;
+  --color-line: 217 225 235;
+  --color-accent: 21 94 239;
+  --color-success: 15 157 88;
+  --color-warning: 181 71 8;
+  --page-bg: 244 247 251;
+  --surface-card: 255 255 255;
+  --surface-panel: 255 255 255;
+  --surface-soft: 249 251 253;
+  --surface-muted: 243 246 250;
+  --border-soft: 255 255 255;
   --panel-border: rgba(15, 23, 42, 0.08);
+}
+
+.dark {
+  color-scheme: dark;
+  --color-ink: 241 245 249;
+  --color-steel: 148 163 184;
+  --color-mist: 30 41 59;
+  --color-line: 71 85 105;
+  --color-accent: 96 165 250;
+  --color-success: 74 222 128;
+  --color-warning: 251 191 36;
+  --page-bg: 7 12 22;
+  --surface-card: 15 23 42;
+  --surface-panel: 9 16 30;
+  --surface-soft: 15 23 42;
+  --surface-muted: 19 31 50;
+  --border-soft: 71 85 105;
+  --panel-border: rgba(148, 163, 184, 0.16);
 }
 
 * {
@@ -18,6 +49,11 @@ html {
 body {
   margin: 0;
   min-width: 320px;
+  background: rgb(var(--page-bg));
+  color: rgb(var(--color-ink));
+  transition:
+    background-color 220ms ease,
+    color 220ms ease;
 }
 
 a {
@@ -47,4 +83,56 @@ textarea {
 
 *::-webkit-scrollbar-track {
   background: transparent;
+}
+
+.dark *::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+}
+
+.dark .bg-white {
+  background-color: rgb(var(--surface-card) / 1) !important;
+}
+
+.dark .bg-white\/70 {
+  background-color: rgb(var(--surface-card) / 0.7) !important;
+}
+
+.dark .bg-white\/80 {
+  background-color: rgb(var(--surface-card) / 0.82) !important;
+}
+
+.dark .bg-white\/85 {
+  background-color: rgb(var(--surface-card) / 0.86) !important;
+}
+
+.dark .bg-white\/90 {
+  background-color: rgb(var(--surface-card) / 0.9) !important;
+}
+
+.dark .bg-mist {
+  background-color: rgb(var(--color-mist) / 1) !important;
+}
+
+.dark .bg-mist\/70,
+.dark .bg-mist\/80 {
+  background-color: rgb(var(--color-mist) / 0.82) !important;
+}
+
+.dark .bg-\[\#f9fbfd\] {
+  background-color: rgb(var(--surface-soft) / 1) !important;
+}
+
+.dark .border-white\/80,
+.dark .border-white\/70,
+.dark .border-white\/60 {
+  border-color: rgb(var(--border-soft) / 0.24) !important;
+}
+
+.dark .border-line\/80 {
+  border-color: rgb(var(--color-line) / 0.9) !important;
+}
+
+.dark .shadow-panel,
+.dark [class*="shadow-["] {
+  box-shadow: 0 24px 90px rgba(2, 6, 23, 0.36) !important;
 }

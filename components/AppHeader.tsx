@@ -4,19 +4,19 @@ import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { useState, useTransition } from "react";
 import { useLocale } from "@/components/providers/locale-provider";
+import { useTheme } from "@/components/providers/theme-provider";
+import type { SessionUser } from "@/lib/types/domain";
 import { cn } from "@/lib/utils/cn";
 
 export function AppHeader({
   sessionUser
 }: {
-  sessionUser: {
-    username: string;
-    displayName: string;
-  } | null;
+  sessionUser: SessionUser | null;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const { locale, setLocale, t } = useLocale();
+  const { theme, toggleTheme } = useTheme();
   const [isPending, startTransition] = useTransition();
   const [logoutError, setLogoutError] = useState<string | null>(null);
 
@@ -29,7 +29,16 @@ export function AppHeader({
         {
           href: "/dashboard" as const,
           label: t("navDashboard")
-        }
+        },
+        ...(sessionUser.role === "admin"
+          ? [
+              {
+                href: "/admin" as const,
+                label: t("navAdmin")
+              }
+            ]
+          : [])
+        
       ]
     : [];
 
@@ -51,7 +60,7 @@ export function AppHeader({
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-line/60 bg-white/85 backdrop-blur-xl">
+    <header className="sticky top-0 z-50 border-b border-line/60 bg-white/85 backdrop-blur-xl transition-colors duration-300 dark:bg-slate-950/82">
       <div className="mx-auto flex w-full max-w-[1560px] items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <div className="flex min-w-0 items-center gap-4">
           <Link href="/" className="min-w-0">
@@ -98,7 +107,14 @@ export function AppHeader({
         <div className="flex items-center gap-3">
           {sessionUser ? (
             <div className="flex items-center gap-2 sm:gap-3">
-              <div className="rounded-full border border-line/70 bg-mist/80 px-3 py-2 text-right sm:px-4">
+              <div className="hidden rounded-full border border-line/70 bg-white px-3 py-2 text-xs font-medium text-steel lg:block dark:bg-slate-900/85">
+                {sessionUser.role === "admin"
+                  ? t("quotaUnlimited")
+                  : `${t("quotaLabel")} ${sessionUser.quota.used}/${
+                      sessionUser.quota.limit ?? "∞"
+                    }`}
+              </div>
+              <div className="rounded-full border border-line/70 bg-mist/80 px-3 py-2 text-right sm:px-4 dark:bg-slate-900/88">
                 <div className="whitespace-nowrap text-xs font-semibold tracking-tight text-ink sm:text-sm">
                   <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-steel/75">
                     {t("headerSignedIn")}
@@ -111,7 +127,7 @@ export function AppHeader({
                 type="button"
                 onClick={handleLogout}
                 disabled={isPending}
-                className="rounded-full border border-line bg-white px-3 py-2 text-xs font-medium text-steel transition hover:border-accent/30 hover:text-ink disabled:cursor-not-allowed disabled:opacity-60 sm:px-4 sm:text-sm"
+                className="rounded-full border border-line bg-white px-3 py-2 text-xs font-medium text-steel transition hover:border-accent/30 hover:text-ink disabled:cursor-not-allowed disabled:opacity-60 sm:px-4 sm:text-sm dark:bg-slate-900/88"
               >
                 {isPending ? t("logoutSubmitting") : t("logoutAction")}
               </button>
@@ -119,7 +135,7 @@ export function AppHeader({
           ) : (
             <Link
               href="/login"
-              className="hidden rounded-full border border-line bg-white px-4 py-2 text-sm font-medium text-steel transition hover:border-accent/30 hover:text-ink md:inline-flex"
+              className="hidden rounded-full border border-line bg-white px-4 py-2 text-sm font-medium text-steel transition hover:border-accent/30 hover:text-ink md:inline-flex dark:bg-slate-900/88"
             >
               {t("loginNav")}
             </Link>
@@ -128,7 +144,7 @@ export function AppHeader({
           <div className="hidden text-xs text-steel/70 sm:block">
             {t("languageLabel")}
           </div>
-          <div className="flex rounded-full border border-line bg-mist p-1">
+          <div className="flex rounded-full border border-line bg-mist p-1 dark:bg-slate-900/88">
             {(["zh-CN", "en"] as const).map((value) => (
               <button
                 key={value}
@@ -145,6 +161,13 @@ export function AppHeader({
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="inline-flex items-center rounded-full border border-line bg-white px-4 py-2 text-sm font-medium text-steel transition hover:border-accent/30 hover:text-ink dark:bg-slate-900/88"
+          >
+            {theme === "dark" ? t("themeLight") : t("themeDark")}
+          </button>
         </div>
       </div>
       {logoutError ? (

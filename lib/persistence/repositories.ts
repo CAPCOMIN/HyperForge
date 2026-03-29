@@ -1,14 +1,18 @@
 import type {
   AgentExecution,
   AgentNode,
+  AppSettings,
   CapsuleDraft,
   GeneDraft,
+  InviteCode,
   OrganismRun,
   RecipeDraft,
   RunDetail,
   RunEvent,
   SubTask,
-  TaskRun
+  TaskRun,
+  UserAccount,
+  UserQuotaSnapshot
 } from "@/lib/types/domain";
 import { getDb } from "@/lib/persistence/db";
 
@@ -21,6 +25,402 @@ function stringify(value: unknown) {
 }
 
 export const repositories = {
+  createUser(input: UserAccount & { passwordHash: string }) {
+    getDb()
+      .prepare(
+        `
+        INSERT INTO users (
+          id, username, display_name, password_hash, role, status, quota_limit,
+          password_version, created_at, updated_at, last_login_at
+        )
+        VALUES (
+          @id, @username, @displayName, @passwordHash, @role, @status, @quotaLimit,
+          @passwordVersion, @createdAt, @updatedAt, @lastLoginAt
+        )
+      `
+      )
+      .run(input);
+  },
+
+  updateUser(user: UserAccount) {
+    getDb()
+      .prepare(
+        `
+        UPDATE users
+        SET username = @username,
+            display_name = @displayName,
+            role = @role,
+            status = @status,
+            quota_limit = @quotaLimit,
+            password_version = @passwordVersion,
+            updated_at = @updatedAt,
+            last_login_at = @lastLoginAt
+        WHERE id = @id
+      `
+      )
+      .run(user);
+  },
+
+  updateUserPassword(userId: string, passwordHash: string, updatedAt: string) {
+    getDb()
+      .prepare(
+        `
+        UPDATE users
+        SET password_hash = ?,
+            password_version = password_version + 1,
+            updated_at = ?
+        WHERE id = ?
+      `
+      )
+      .run(passwordHash, updatedAt, userId);
+  },
+
+  touchUserLogin(userId: string, timestamp: string) {
+    getDb()
+      .prepare(
+        `
+        UPDATE users
+        SET last_login_at = ?, updated_at = ?
+        WHERE id = ?
+      `
+      )
+      .run(timestamp, timestamp, userId);
+  },
+
+  getUserById(id: string) {
+    const row = getDb()
+      .prepare("SELECT * FROM users WHERE id = ?")
+      .get(id) as
+      | {
+          id: string;
+          username: string;
+          display_name: string;
+          password_hash: string;
+          role: UserAccount["role"];
+          status: UserAccount["status"];
+          quota_limit: number | null;
+          password_version: number;
+          created_at: string;
+          updated_at: string;
+          last_login_at: string | null;
+        }
+      | undefined;
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      id: row.id,
+      username: row.username,
+      displayName: row.display_name,
+      passwordHash: row.password_hash,
+      role: row.role,
+      status: row.status,
+      quotaLimit: row.quota_limit,
+      passwordVersion: row.password_version,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      lastLoginAt: row.last_login_at
+    };
+  },
+
+  getUserByUsername(username: string) {
+    const row = getDb()
+      .prepare("SELECT * FROM users WHERE username = ?")
+      .get(username) as
+      | {
+          id: string;
+          username: string;
+          display_name: string;
+          password_hash: string;
+          role: UserAccount["role"];
+          status: UserAccount["status"];
+          quota_limit: number | null;
+          password_version: number;
+          created_at: string;
+          updated_at: string;
+          last_login_at: string | null;
+        }
+      | undefined;
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      id: row.id,
+      username: row.username,
+      displayName: row.display_name,
+      passwordHash: row.password_hash,
+      role: row.role,
+      status: row.status,
+      quotaLimit: row.quota_limit,
+      passwordVersion: row.password_version,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      lastLoginAt: row.last_login_at
+    };
+  },
+
+  listUsers() {
+    const rows = getDb()
+      .prepare("SELECT * FROM users ORDER BY role DESC, created_at ASC")
+      .all() as Array<{
+      id: string;
+      username: string;
+      display_name: string;
+      role: UserAccount["role"];
+      status: UserAccount["status"];
+      quota_limit: number | null;
+      password_version: number;
+      created_at: string;
+      updated_at: string;
+      last_login_at: string | null;
+    }>;
+
+    return rows.map(
+      (row) =>
+        ({
+          id: row.id,
+          username: row.username,
+          displayName: row.display_name,
+          role: row.role,
+          status: row.status,
+          quotaLimit: row.quota_limit,
+          passwordVersion: row.password_version,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          lastLoginAt: row.last_login_at
+        }) satisfies UserAccount
+    );
+  },
+
+  countAdmins() {
+    const row = getDb()
+      .prepare("SELECT COUNT(*) as count FROM users WHERE role = 'admin' AND status = 'active'")
+      .get() as { count: number };
+
+    return row.count;
+  },
+
+  countRunsByUser(userId: string) {
+    const row = getDb()
+      .prepare("SELECT COUNT(*) as count FROM task_runs WHERE user_id = ?")
+      .get(userId) as { count: number };
+
+    return row.count;
+  },
+
+  getUserQuotaSnapshot(userId: string): UserQuotaSnapshot | null {
+    const user = this.getUserById(userId);
+
+    if (!user) {
+      return null;
+    }
+
+    const used = this.countRunsByUser(userId);
+    return {
+      limit: user.quotaLimit,
+      used,
+      remaining: user.quotaLimit === null ? null : Math.max(user.quotaLimit - used, 0)
+    };
+  },
+
+  upsertAppSetting(key: string, value: string | null, updatedAt: string, updatedByUserId: string) {
+    getDb()
+      .prepare(
+        `
+        INSERT INTO app_settings (key, value, updated_at, updated_by_user_id)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(key) DO UPDATE SET
+          value = excluded.value,
+          updated_at = excluded.updated_at,
+          updated_by_user_id = excluded.updated_by_user_id
+      `
+      )
+      .run(key, value, updatedAt, updatedByUserId);
+  },
+
+  getAppSettings(): AppSettings {
+    const rows = getDb()
+      .prepare("SELECT * FROM app_settings")
+      .all() as Array<{
+      key: string;
+      value: string | null;
+      updated_at: string;
+      updated_by_user_id: string | null;
+    }>;
+
+    const map = new Map(rows.map((row) => [row.key, row]));
+    const latest = rows.sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0];
+
+    return {
+      minimaxApiKey: map.get("minimax_api_key")?.value ?? null,
+      evomapApiKey: map.get("evomap_api_key")?.value ?? null,
+      evomapNodeId: map.get("evomap_node_id")?.value ?? null,
+      evomapNodeSecret: map.get("evomap_node_secret")?.value ?? null,
+      updatedAt: latest?.updated_at ?? null,
+      updatedByUserId: latest?.updated_by_user_id ?? null
+    };
+  },
+
+  createInviteCode(inviteCode: InviteCode) {
+    getDb()
+      .prepare(
+        `
+        INSERT INTO invite_codes (
+          id, code, note, created_by_user_id, max_uses, used_count, status,
+          expires_at, created_at, updated_at
+        )
+        VALUES (
+          @id, @code, @note, @createdByUserId, @maxUses, @usedCount, @status,
+          @expiresAt, @createdAt, @updatedAt
+        )
+      `
+      )
+      .run(inviteCode);
+  },
+
+  updateInviteCode(inviteCode: InviteCode) {
+    getDb()
+      .prepare(
+        `
+        UPDATE invite_codes
+        SET note = @note,
+            max_uses = @maxUses,
+            used_count = @usedCount,
+            status = @status,
+            expires_at = @expiresAt,
+            updated_at = @updatedAt
+        WHERE id = @id
+      `
+      )
+      .run(inviteCode);
+  },
+
+  getInviteCodeByCode(code: string) {
+    const row = getDb()
+      .prepare("SELECT * FROM invite_codes WHERE code = ?")
+      .get(code) as
+      | {
+          id: string;
+          code: string;
+          note: string | null;
+          created_by_user_id: string;
+          max_uses: number;
+          used_count: number;
+          status: InviteCode["status"];
+          expires_at: string | null;
+          created_at: string;
+          updated_at: string;
+        }
+      | undefined;
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      id: row.id,
+      code: row.code,
+      note: row.note,
+      createdByUserId: row.created_by_user_id,
+      maxUses: row.max_uses,
+      usedCount: row.used_count,
+      status: row.status,
+      expiresAt: row.expires_at,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    } satisfies InviteCode;
+  },
+
+  getInviteCodeById(id: string) {
+    const row = getDb()
+      .prepare("SELECT * FROM invite_codes WHERE id = ?")
+      .get(id) as
+      | {
+          id: string;
+          code: string;
+          note: string | null;
+          created_by_user_id: string;
+          max_uses: number;
+          used_count: number;
+          status: InviteCode["status"];
+          expires_at: string | null;
+          created_at: string;
+          updated_at: string;
+        }
+      | undefined;
+
+    if (!row) {
+      return null;
+    }
+
+    return {
+      id: row.id,
+      code: row.code,
+      note: row.note,
+      createdByUserId: row.created_by_user_id,
+      maxUses: row.max_uses,
+      usedCount: row.used_count,
+      status: row.status,
+      expiresAt: row.expires_at,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    } satisfies InviteCode;
+  },
+
+  listInviteCodes() {
+    const rows = getDb()
+      .prepare("SELECT * FROM invite_codes ORDER BY created_at DESC")
+      .all() as Array<{
+      id: string;
+      code: string;
+      note: string | null;
+      created_by_user_id: string;
+      max_uses: number;
+      used_count: number;
+      status: InviteCode["status"];
+      expires_at: string | null;
+      created_at: string;
+      updated_at: string;
+    }>;
+
+    return rows.map(
+      (row) =>
+        ({
+          id: row.id,
+          code: row.code,
+          note: row.note,
+          createdByUserId: row.created_by_user_id,
+          maxUses: row.max_uses,
+          usedCount: row.used_count,
+          status: row.status,
+          expiresAt: row.expires_at,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at
+        }) satisfies InviteCode
+    );
+  },
+
+  consumeInviteCode(id: string, timestamp: string) {
+    getDb()
+      .prepare(
+        `
+        UPDATE invite_codes
+        SET used_count = used_count + 1,
+            status = CASE
+              WHEN used_count + 1 >= max_uses THEN 'exhausted'
+              ELSE status
+            END,
+            updated_at = ?
+        WHERE id = ?
+      `
+      )
+      .run(timestamp, id);
+  },
+
   upsertAgentNode(agentNode: AgentNode) {
     getDb()
       .prepare(
@@ -75,8 +475,8 @@ export const repositories = {
     getDb()
       .prepare(
         `
-        INSERT INTO task_runs (id, input_task, mode, agent_runtime, status, started_at, finished_at, summary, llm_model_name)
-        VALUES (@id, @inputTask, @mode, @agentRuntime, @status, @startedAt, @finishedAt, @summary, @llmModelName)
+        INSERT INTO task_runs (id, user_id, input_task, mode, agent_runtime, status, started_at, finished_at, summary, llm_model_name)
+        VALUES (@id, @userId, @inputTask, @mode, @agentRuntime, @status, @startedAt, @finishedAt, @summary, @llmModelName)
       `
       )
       .run(run);
@@ -94,11 +494,20 @@ export const repositories = {
       .run(run);
   },
 
-  listRuns() {
+  listRuns(options?: { userId?: string }) {
     const rows = getDb()
-      .prepare("SELECT * FROM task_runs ORDER BY started_at DESC")
-      .all() as Array<{
+      .prepare(
+        `
+        SELECT task_runs.*, users.username AS owner_username, users.display_name AS owner_display_name
+        FROM task_runs
+        LEFT JOIN users ON users.id = task_runs.user_id
+        ${options?.userId ? "WHERE task_runs.user_id = @userId" : ""}
+        ORDER BY task_runs.started_at DESC
+      `
+      )
+      .all(options?.userId ? { userId: options.userId } : {}) as Array<{
       id: string;
+      user_id: string;
       input_task: string;
       mode: TaskRun["mode"];
       agent_runtime: TaskRun["agentRuntime"];
@@ -107,12 +516,17 @@ export const repositories = {
       finished_at: string | null;
       summary: string;
       llm_model_name: string | null;
+      owner_username: string | null;
+      owner_display_name: string | null;
     }>;
 
     return rows.map(
       (row) =>
         ({
           id: row.id,
+          userId: row.user_id,
+          ownerUsername: row.owner_username,
+          ownerDisplayName: row.owner_display_name,
           inputTask: row.input_task,
           mode: row.mode,
           agentRuntime: row.agent_runtime,
@@ -127,10 +541,18 @@ export const repositories = {
 
   getRun(id: string) {
     const row = getDb()
-      .prepare("SELECT * FROM task_runs WHERE id = ?")
+      .prepare(
+        `
+        SELECT task_runs.*, users.username AS owner_username, users.display_name AS owner_display_name
+        FROM task_runs
+        LEFT JOIN users ON users.id = task_runs.user_id
+        WHERE task_runs.id = ?
+      `
+      )
       .get(id) as
       | {
           id: string;
+          user_id: string;
           input_task: string;
           mode: TaskRun["mode"];
           agent_runtime: TaskRun["agentRuntime"];
@@ -139,6 +561,8 @@ export const repositories = {
           finished_at: string | null;
           summary: string;
           llm_model_name: string | null;
+          owner_username: string | null;
+          owner_display_name: string | null;
         }
       | undefined;
 
@@ -148,6 +572,9 @@ export const repositories = {
 
     return {
       id: row.id,
+      userId: row.user_id,
+      ownerUsername: row.owner_username,
+      ownerDisplayName: row.owner_display_name,
       inputTask: row.input_task,
       mode: row.mode,
       agentRuntime: row.agent_runtime,

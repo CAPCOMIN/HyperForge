@@ -1,9 +1,9 @@
+import { getRuntimeConfig } from "@/lib/config/runtime";
 import { createEvoMapClient } from "@/lib/evomap/client";
 import { ensureNodeIdentity } from "@/lib/evomap/auth";
 import { repositories } from "@/lib/persistence/repositories";
-import { env } from "@/lib/utils/env";
 
-export async function sendHeartbeat(mode = env.EVOMAP_MODE) {
+export async function sendHeartbeat(mode = getRuntimeConfig().evomapMode) {
   const { senderId, nodeSecret } = await ensureNodeIdentity("master", mode);
   const genes = repositories.listRuns().length;
   const client = createEvoMapClient(mode);

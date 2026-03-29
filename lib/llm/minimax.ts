@@ -1,11 +1,11 @@
 import { z } from "zod";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 import type {
   AgentExecutionResult,
   AgentGeneCandidate,
   AgentRuntime,
   TaskPlan
 } from "@/lib/types/domain";
-import { env } from "@/lib/utils/env";
 
 const planSchema = z.object({
   goal: z.string().min(10),
@@ -104,7 +104,7 @@ function extractContent(response: MiniMaxChatResponse) {
       .trim();
   }
 
-  throw new MiniMaxError("MiniMax returned an empty response.");
+  throw new MiniMaxError("The LLM returned an empty response.");
 }
 
 function extractJsonBlock(text: string) {
@@ -181,7 +181,7 @@ function extractJsonBlock(text: string) {
     } catch {}
   }
 
-  throw new MiniMaxError("MiniMax did not return valid JSON.");
+  throw new MiniMaxError("The LLM did not return valid JSON.");
 }
 
 function parseJsonResponse(raw: string) {
@@ -307,7 +307,7 @@ function normalizeAgentOutputPayload(
     asString(record.detail) ||
     asString(record.description) ||
     asString(record.analysis) ||
-    `${summary} The output was normalized from a flexible MiniMax JSON response.`;
+    `${summary} The output was normalized from a flexible LLM JSON response.`;
   const artifacts =
     asRecord(record.artifacts) ??
     Object.fromEntries(
@@ -363,16 +363,17 @@ function normalizeAgentOutputPayload(
           : ["Review the result for downstream reuse and clarity."],
       content:
         asString(candidateRecord.content) ||
-        `${detail} This reusable strategy was normalized from a MiniMax response so the workflow can continue without a mock fallback.`
+        `${detail} This reusable strategy was normalized from an LLM response so the workflow can continue without a mock fallback.`
     }
   };
 }
 
 function getBaseCandidates() {
+  const config = getRuntimeConfig();
   return Array.from(
     new Set([
-      env.MINIMAX_BASE_URL,
-      env.MINIMAX_BASE_URL.includes("minimaxi.com")
+      config.minimaxBaseUrl,
+      config.minimaxBaseUrl.includes("minimaxi.com")
         ? "https://api.minimax.io/v1"
         : "https://api.minimaxi.com/v1"
     ])
@@ -411,18 +412,19 @@ function normalizeMiniMaxError(error: unknown) {
     return new MiniMaxError(error.message);
   }
 
-  return new MiniMaxError("Unknown MiniMax error.");
+  return new MiniMaxError("Unknown LLM provider error.");
 }
 
 function describeMiniMaxError(error: MiniMaxError): MiniMaxAvailability {
   const checkedAt = new Date().toISOString();
-  const model = env.MINIMAX_MODEL_NAME;
+  const config = getRuntimeConfig();
+  const model = config.minimaxModelName;
 
-  if (!env.MINIMAX_API_KEY) {
+  if (!config.minimaxApiKey) {
     return {
       available: false,
       status: "missing_key",
-      message: "MINIMAX_API_KEY is missing.",
+      message: "The LLM API key is missing.",
       model,
       checkedAt
     };
@@ -432,7 +434,7 @@ function describeMiniMaxError(error: MiniMaxError): MiniMaxAvailability {
     return {
       available: false,
       status: "insufficient_balance",
-      message: "MiniMax credits are unavailable or exhausted for the current API key.",
+      message: "LLM credits are unavailable or exhausted for the current API key.",
       model,
       checkedAt
     };
@@ -442,7 +444,7 @@ function describeMiniMaxError(error: MiniMaxError): MiniMaxAvailability {
     return {
       available: false,
       status: "auth_error",
-      message: "MiniMax rejected the API key. Verify the key, account scope, and model access.",
+      message: "The LLM provider rejected the API key. Verify the key, account scope, and model access.",
       model,
       checkedAt
     };
@@ -452,7 +454,7 @@ function describeMiniMaxError(error: MiniMaxError): MiniMaxAvailability {
     return {
       available: false,
       status: "rate_limited",
-      message: "MiniMax is rate limiting the request right now. Retry in a moment.",
+      message: "The LLM provider is rate limiting the request right now. Retry in a moment.",
       model,
       checkedAt
     };
@@ -462,7 +464,7 @@ function describeMiniMaxError(error: MiniMaxError): MiniMaxAvailability {
     return {
       available: false,
       status: "server_error",
-      message: "MiniMax is currently unavailable on the server side.",
+      message: "The LLM provider is currently unavailable on the server side.",
       model,
       checkedAt
     };
@@ -476,7 +478,7 @@ function describeMiniMaxError(error: MiniMaxError): MiniMaxAvailability {
     return {
       available: false,
       status: "invalid_response",
-      message: "MiniMax returned a malformed response for the expected structured output.",
+      message: "The LLM provider returned a malformed response for the expected structured output.",
       model,
       checkedAt
     };
@@ -485,7 +487,7 @@ function describeMiniMaxError(error: MiniMaxError): MiniMaxAvailability {
   return {
     available: false,
     status: "network_error",
-    message: error.message || "MiniMax request failed due to a network or timeout issue.",
+    message: error.message || "The LLM request failed due to a network or timeout issue.",
     model,
     checkedAt
   };
@@ -499,25 +501,27 @@ async function callMiniMax(
     temperature?: number;
   }
 ) {
-  if (!env.MINIMAX_API_KEY) {
-    throw new MiniMaxError("MINIMAX_API_KEY is missing.");
+  const config = getRuntimeConfig();
+
+  if (!config.minimaxApiKey) {
+    throw new MiniMaxError("The LLM API key is missing.");
   }
 
   let lastError: Error | null = null;
 
   for (const baseUrl of getBaseCandidates()) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), env.MINIMAX_TIMEOUT_MS);
+    const timeout = setTimeout(() => controller.abort(), config.minimaxTimeoutMs);
 
     try {
       const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${env.MINIMAX_API_KEY}`
+          Authorization: `Bearer ${config.minimaxApiKey}`
         },
         body: JSON.stringify({
-          model: env.MINIMAX_MODEL_NAME,
+          model: config.minimaxModelName,
           temperature: options?.temperature ?? 0.2,
           max_tokens: options?.maxTokens ?? 1400,
           messages: [
@@ -534,7 +538,7 @@ async function callMiniMax(
         const body = await response.text();
         const parsed = parseErrorResponse(body);
         throw new MiniMaxError(
-          `MiniMax request failed (${response.status}): ${parsed.message.slice(0, 500)}`,
+          `LLM request failed (${response.status}): ${parsed.message.slice(0, 500)}`,
           {
             statusCode: response.status,
             providerCode: parsed.providerCode
@@ -555,7 +559,7 @@ async function callMiniMax(
     }
   }
 
-  throw lastError ?? new MiniMaxError("MiniMax request failed.");
+  throw lastError ?? new MiniMaxError("LLM request failed.");
 }
 
 async function generateStructured<T>(
@@ -589,13 +593,14 @@ async function generateStructured<T>(
 
 export async function getMiniMaxAvailability(force = false): Promise<MiniMaxAvailability> {
   const cached = global.__hyperforgeMiniMaxAvailability;
+  const config = getRuntimeConfig();
 
   if (!force && cached && cached.expiresAt > Date.now()) {
     return cached.value;
   }
 
-  if (!env.MINIMAX_API_KEY) {
-    const missing = describeMiniMaxError(new MiniMaxError("MINIMAX_API_KEY is missing."));
+  if (!config.minimaxApiKey) {
+    const missing = describeMiniMaxError(new MiniMaxError("The LLM API key is missing."));
     global.__hyperforgeMiniMaxAvailability = {
       value: missing,
       expiresAt: Date.now() + 15_000
@@ -616,8 +621,8 @@ export async function getMiniMaxAvailability(force = false): Promise<MiniMaxAvai
     const ready: MiniMaxAvailability = {
       available: true,
       status: "ready",
-      message: "MiniMax is reachable and ready for task planning.",
-      model: env.MINIMAX_MODEL_NAME,
+      message: "The configured LLM is reachable and ready for task planning.",
+      model: config.minimaxModelName,
       checkedAt: new Date().toISOString()
     };
 
@@ -671,6 +676,7 @@ export async function executeAgentWithMiniMax(params: {
   result: AgentExecutionResult;
   candidate: AgentGeneCandidate;
 }> {
+  const config = getRuntimeConfig();
   const completed = Object.values(params.completedExecutions)
     .map((item) => ({
       summary: item.summary,
@@ -710,7 +716,7 @@ Output rules:
       artifacts: {
         ...response.artifacts,
         runtimeProvider: "minimax" satisfies AgentRuntime,
-        llmModelName: env.MINIMAX_MODEL_NAME,
+        llmModelName: config.minimaxModelName,
         __geneCandidate: response.geneCandidate
       },
       success: true

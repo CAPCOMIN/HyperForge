@@ -1,10 +1,12 @@
 import { createAgentRegistry } from "@/lib/agents/agent-registry";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 import type {
   AgentExecutionResult,
   AgentNode,
   AgentRuntime,
   DemoMode,
   RunDetail,
+  SessionUser,
   SubTask,
   TaskRun
 } from "@/lib/types/domain";
@@ -18,7 +20,6 @@ import { sanitizeTaskPlan, sortSubtasksByDependency } from "@/lib/orchestration/
 import { assertRunTransition } from "@/lib/orchestration/run-state-machine";
 import { repositories } from "@/lib/persistence/repositories";
 import { getRunDetail } from "@/lib/runs/get-run-detail";
-import { env } from "@/lib/utils/env";
 import { createId, createNodeId } from "@/lib/utils/ids";
 import { nowIso } from "@/lib/utils/time";
 
@@ -39,7 +40,7 @@ function ensureLocalAgentNodes() {
       evomapNodeId: existing?.evomapNodeId ?? null,
       nodeSecret: existing?.nodeSecret ?? null,
       status: existing?.status ?? "ready",
-      modelName: existing?.modelName ?? env.EVOMAP_MODEL_NAME,
+      modelName: existing?.modelName ?? getRuntimeConfig().evomapModelName,
       createdAt: existing?.createdAt ?? timestamp,
       updatedAt: timestamp
     });
@@ -55,6 +56,7 @@ function getActiveRuns() {
 }
 
 function createQueuedRun(
+  user: SessionUser,
   task: string,
   mode: DemoMode,
   agentRuntime: AgentRuntime
@@ -63,6 +65,9 @@ function createQueuedRun(
   const runId = createId("run");
   const run: TaskRun = {
     id: runId,
+    userId: user.id,
+    ownerUsername: user.username,
+    ownerDisplayName: user.displayName,
     inputTask: task,
     mode,
     agentRuntime,
@@ -71,9 +76,10 @@ function createQueuedRun(
     finishedAt: null,
     summary:
       agentRuntime === "minimax"
-        ? "Run queued. Preparing MiniMax-backed agents."
+        ? "Run queued. Preparing LLM-backed agents."
         : "Run queued. Preparing mock agents.",
-    llmModelName: agentRuntime === "minimax" ? env.MINIMAX_MODEL_NAME : null
+    llmModelName:
+      agentRuntime === "minimax" ? getRuntimeConfig().minimaxModelName : null
   };
 
   repositories.createRun(run);
@@ -106,7 +112,7 @@ async function executeDemoRun(
   run.status = "planning";
   run.summary =
     agentRuntime === "minimax"
-      ? "Master agent is planning the task DAG with MiniMax."
+      ? "Master agent is planning the task DAG with the configured LLM."
       : "Master agent is planning the task DAG.";
   repositories.updateRun(run);
 
@@ -131,8 +137,8 @@ async function executeDemoRun(
         title: "Planning degraded",
         detail:
           error instanceof Error
-            ? `MiniMax planning returned an invalid structure. Falling back to the deterministic planner. ${error.message}`
-            : "MiniMax planning returned an invalid structure. Falling back to the deterministic planner.",
+            ? `LLM planning returned an invalid structure. Falling back to the deterministic planner. ${error.message}`
+            : "LLM planning returned an invalid structure. Falling back to the deterministic planner.",
         createdAt: nowIso()
       });
 
@@ -195,8 +201,8 @@ async function executeDemoRun(
   run.summary =
     agentRuntime === "minimax"
       ? recoveredPlanning
-        ? "MiniMax planning required deterministic recovery. Agents are now executing subtasks."
-        : "Agents are executing subtasks with MiniMax."
+        ? "LLM planning required deterministic recovery. Agents are now executing subtasks."
+        : "Agents are executing subtasks with the configured LLM."
       : "Agents are executing subtasks.";
   repositories.updateRun(run);
 
@@ -240,11 +246,11 @@ async function executeDemoRun(
         repositories.addRunEvent({
           id: createId("event"),
           runId,
-          title: `Execution degraded: ${current.title}`,
-          detail:
-            error instanceof Error
-              ? `${current.assignedAgent} could not complete the task with MiniMax. Falling back to deterministic execution. ${error.message}`
-              : `${current.assignedAgent} could not complete the task with MiniMax. Falling back to deterministic execution.`,
+        title: `Execution degraded: ${current.title}`,
+        detail:
+          error instanceof Error
+              ? `${current.assignedAgent} could not complete the task with the LLM runtime. Falling back to deterministic execution. ${error.message}`
+              : `${current.assignedAgent} could not complete the task with the LLM runtime. Falling back to deterministic execution.`,
           createdAt: nowIso()
         });
 
@@ -260,7 +266,7 @@ async function executeDemoRun(
           runtimeProvider: "mock" satisfies AgentRuntime,
           recovery: {
             source: "minimax",
-            reason: error instanceof Error ? error.message : "Unknown MiniMax failure."
+            reason: error instanceof Error ? error.message : "Unknown LLM runtime failure."
           }
         };
       } else {
@@ -449,8 +455,8 @@ async function executeDemoRun(
   run.summary =
     agentRuntime === "minimax"
       ? recoveredPlanning || recoveredExecutions > 0
-        ? `Master orchestrator completed the MiniMax-backed workflow with resilient recovery: ${recoveredPlanning ? "planning recovered, " : ""}${recoveredExecutions} execution fallback(s), Gene/Capsule drafting, EvoMap integration, recipe creation, and organism expression.`
-        : "Master orchestrator completed the Minimax-backed closed-loop demo: DAG execution, Gene/Capsule drafting, EvoMap integration, recipe creation, and organism expression."
+        ? `Master orchestrator completed the LLM-backed workflow with resilient recovery: ${recoveredPlanning ? "planning recovered, " : ""}${recoveredExecutions} execution fallback(s), Gene/Capsule drafting, EvoMap integration, recipe creation, and organism expression.`
+        : "Master orchestrator completed the LLM-backed closed-loop workflow: DAG execution, Gene/Capsule drafting, EvoMap integration, recipe creation, and organism expression."
       : "Master orchestrator completed the closed-loop demo: DAG execution, Gene/Capsule drafting, EvoMap publish, recipe creation, and organism expression.";
   repositories.updateRun(run);
   const finalDetail = repositories.getRunDetail(runId);
@@ -482,20 +488,22 @@ async function executeDemoRun(
 }
 
 export async function runDemoTask(
+  user: SessionUser,
   task: string,
-  mode: DemoMode = env.EVOMAP_MODE,
+  mode: DemoMode = getRuntimeConfig().evomapMode,
   agentRuntime: AgentRuntime = "mock"
 ): Promise<RunDetail> {
-  const run = createQueuedRun(task, mode, agentRuntime);
+  const run = createQueuedRun(user, task, mode, agentRuntime);
   return executeDemoRun(run.id, task, mode, agentRuntime);
 }
 
 export function startDemoTask(
+  user: SessionUser,
   task: string,
-  mode: DemoMode = env.EVOMAP_MODE,
+  mode: DemoMode = getRuntimeConfig().evomapMode,
   agentRuntime: AgentRuntime = "mock"
 ) {
-  const run = createQueuedRun(task, mode, agentRuntime);
+  const run = createQueuedRun(user, task, mode, agentRuntime);
   const activeRuns = getActiveRuns();
 
   const job: Promise<void> = executeDemoRun(run.id, task, mode, agentRuntime)

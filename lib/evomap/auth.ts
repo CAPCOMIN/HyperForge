@@ -1,14 +1,15 @@
 import type { AgentRole } from "@/lib/types/domain";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 import { repositories } from "@/lib/persistence/repositories";
 import { createEvoMapClient } from "@/lib/evomap/client";
-import { env } from "@/lib/utils/env";
 import { createNodeId } from "@/lib/utils/ids";
 import { nowIso } from "@/lib/utils/time";
 
 export async function ensureNodeIdentity(
   role: AgentRole,
-  mode = env.EVOMAP_MODE
+  mode = getRuntimeConfig().evomapMode
 ) {
+  const config = getRuntimeConfig();
   const existing = repositories.getAgentNode(role);
 
   if (existing?.evomapNodeId && existing.nodeSecret) {
@@ -19,22 +20,22 @@ export async function ensureNodeIdentity(
     };
   }
 
-  if (env.EVOMAP_NODE_ID && env.EVOMAP_NODE_SECRET) {
+  if (config.evomapNodeId && config.evomapNodeSecret) {
     const timestamp = nowIso();
     repositories.upsertAgentNode({
       id: existing?.id ?? createNodeId(role),
       role,
-      evomapNodeId: env.EVOMAP_NODE_ID,
-      nodeSecret: env.EVOMAP_NODE_SECRET,
+      evomapNodeId: config.evomapNodeId,
+      nodeSecret: config.evomapNodeSecret,
       status: "ready",
-      modelName: env.EVOMAP_MODEL_NAME,
+      modelName: config.evomapModelName,
       createdAt: existing?.createdAt ?? timestamp,
       updatedAt: timestamp
     });
 
     return {
-      senderId: env.EVOMAP_NODE_ID,
-      nodeSecret: env.EVOMAP_NODE_SECRET,
+      senderId: config.evomapNodeId,
+      nodeSecret: config.evomapNodeSecret,
       status: "ready"
     };
   }
@@ -47,7 +48,7 @@ export async function ensureNodeIdentity(
       role,
       demo: true
     },
-    model: env.EVOMAP_MODEL_NAME,
+    model: config.evomapModelName,
     gene_count: 0,
     capsule_count: 0,
     env_fingerprint: {
@@ -67,7 +68,7 @@ export async function ensureNodeIdentity(
     evomapNodeId: hello.yourNodeId,
     nodeSecret: hello.nodeSecret,
     status: hello.status,
-    modelName: env.EVOMAP_MODEL_NAME,
+    modelName: config.evomapModelName,
     createdAt: existing?.createdAt ?? timestamp,
     updatedAt: timestamp
   });

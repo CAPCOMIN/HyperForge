@@ -1,33 +1,41 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createHmac, timingSafeEqual } from "node:crypto";
+import type { SessionUser, UserAccount } from "@/lib/types/domain";
+import { verifyPassword } from "@/lib/auth/password";
+import { repositories } from "@/lib/persistence/repositories";
 import { env } from "@/lib/utils/env";
 
-export interface SessionUser {
-  username: string;
-  displayName: string;
-}
-
 const SESSION_COOKIE_NAME = "hyperforge_session";
-const SESSION_VERSION = 1;
+const SESSION_VERSION = 2;
 
-function getAuthConfig() {
-  if (
-    !env.AUTH_BOOTSTRAP_USERNAME ||
-    !env.AUTH_BOOTSTRAP_PASSWORD ||
-    !env.AUTH_BOOTSTRAP_DISPLAY_NAME ||
-    !env.AUTH_SESSION_SECRET
-  ) {
-    throw new Error(
-      "Authentication is not configured. Set AUTH_BOOTSTRAP_USERNAME, AUTH_BOOTSTRAP_PASSWORD, AUTH_BOOTSTRAP_DISPLAY_NAME, and AUTH_SESSION_SECRET in the server environment."
-    );
+function getSessionSecret() {
+  if (!env.AUTH_SESSION_SECRET) {
+    throw new Error("AUTH_SESSION_SECRET is not configured.");
   }
 
+  return env.AUTH_SESSION_SECRET;
+}
+
+function signSessionPayload(value: string) {
+  return createHmac("sha256", getSessionSecret()).update(value).digest("hex");
+}
+
+function toSessionUser(user: UserAccount): SessionUser {
+  const quota = repositories.getUserQuotaSnapshot(user.id);
+
   return {
-    username: env.AUTH_BOOTSTRAP_USERNAME,
-    password: env.AUTH_BOOTSTRAP_PASSWORD,
-    displayName: env.AUTH_BOOTSTRAP_DISPLAY_NAME,
-    sessionSecret: env.AUTH_SESSION_SECRET
+    id: user.id,
+    username: user.username,
+    displayName: user.displayName,
+    role: user.role,
+    status: user.status,
+    quota:
+      quota ?? {
+        limit: user.quotaLimit,
+        used: 0,
+        remaining: user.quotaLimit
+      }
   };
 }
 
@@ -44,44 +52,33 @@ export function resolveSafeNextPath(nextPath?: string | null) {
   return nextPath;
 }
 
-export function validateLoginCredentials(username: string, password: string) {
-  const auth = getAuthConfig();
-  return (
-    username === auth.username &&
-    password === auth.password
-  );
+export function authenticateUser(username: string, password: string) {
+  const user = repositories.getUserByUsername(username);
+
+  if (!user || user.status !== "active") {
+    return null;
+  }
+
+  if (!verifyPassword(password, user.passwordHash)) {
+    return null;
+  }
+
+  return user;
 }
 
-export function getDefaultSessionUser(): SessionUser {
-  const auth = getAuthConfig();
-  return {
-    username: auth.username,
-    displayName: auth.displayName
-  };
-}
-
-function signSessionPayload(value: string) {
-  const auth = getAuthConfig();
-  return createHmac("sha256", auth.sessionSecret)
-    .update(value)
-    .digest("hex");
-}
-
-export function createSessionCookieValue(username: string) {
+export function createSessionCookieValue(user: UserAccount) {
   const payload = Buffer.from(
     JSON.stringify({
       v: SESSION_VERSION,
-      u: username
+      uid: user.id,
+      pv: user.passwordVersion
     })
   ).toString("base64url");
 
-  const signature = signSessionPayload(payload);
-  return `${payload}.${signature}`;
+  return `${payload}.${signSessionPayload(payload)}`;
 }
 
 function verifySessionCookieValue(value?: string | null) {
-  const auth = getAuthConfig();
-
   if (!value) {
     return null;
   }
@@ -96,10 +93,7 @@ function verifySessionCookieValue(value?: string | null) {
   const provided = Buffer.from(signature);
   const expected = Buffer.from(expectedSignature);
 
-  if (
-    provided.length !== expected.length ||
-    !timingSafeEqual(provided, expected)
-  ) {
+  if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
     return null;
   }
 
@@ -108,17 +102,29 @@ function verifySessionCookieValue(value?: string | null) {
       Buffer.from(payload, "base64url").toString("utf8")
     ) as {
       v?: number;
-      u?: string;
+      uid?: string;
+      pv?: number;
     };
 
     if (
       decoded.v !== SESSION_VERSION ||
-      decoded.u !== auth.username
+      !decoded.uid ||
+      typeof decoded.pv !== "number"
     ) {
       return null;
     }
 
-    return decoded.u;
+    const user = repositories.getUserById(decoded.uid);
+
+    if (
+      !user ||
+      user.status !== "active" ||
+      user.passwordVersion !== decoded.pv
+    ) {
+      return null;
+    }
+
+    return user;
   } catch {
     return null;
   }
@@ -127,12 +133,13 @@ function verifySessionCookieValue(value?: string | null) {
 export async function getSessionUser(): Promise<SessionUser | null> {
   const cookieStore = await cookies();
   const session = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+  const user = verifySessionCookieValue(session);
 
-  if (!verifySessionCookieValue(session)) {
+  if (!user) {
     return null;
   }
 
-  return getDefaultSessionUser();
+  return toSessionUser(user);
 }
 
 export async function requireSessionUser(nextPath?: string) {
@@ -145,6 +152,26 @@ export async function requireSessionUser(nextPath?: string) {
   }
 
   return user;
+}
+
+export async function requireAdminUser(nextPath?: string) {
+  const user = await requireSessionUser(nextPath);
+
+  if (user.role !== "admin") {
+    redirect("/" as never);
+  }
+
+  return user;
+}
+
+export function ensureRunQuota(user: SessionUser) {
+  if (user.quota.limit !== null && user.quota.used >= user.quota.limit) {
+    throw new Error("quota_exceeded");
+  }
+}
+
+export function canAccessRun(user: SessionUser, runUserId: string) {
+  return user.role === "admin" || user.id === runUserId;
 }
 
 export function getSessionCookieName() {

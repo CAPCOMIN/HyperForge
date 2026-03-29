@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import type { TaskRun } from "@/lib/types/domain";
+import type { TaskRun, UserAccount } from "@/lib/types/domain";
 import { useLocale } from "@/components/providers/locale-provider";
 import { cn } from "@/lib/utils/cn";
 
@@ -47,7 +48,18 @@ function statusLabel(
   return t("runStatusQueued");
 }
 
-export function DashboardClient({ runs }: { runs: TaskRun[] }) {
+export function DashboardClient({
+  runs,
+  users,
+  selectedOwnerId,
+  isAdmin
+}: {
+  runs: TaskRun[];
+  users: UserAccount[];
+  selectedOwnerId: string | null;
+  isAdmin: boolean;
+}) {
+  const router = useRouter();
   const { t, formatDateTime, formatRelativeDuration } = useLocale();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<RunFilter>("all");
@@ -121,18 +133,37 @@ export function DashboardClient({ runs }: { runs: TaskRun[] }) {
             placeholder={t("dashboardSearch")}
             className="w-full rounded-2xl border border-line bg-[#f9fbfd] px-4 py-3 text-sm outline-none transition focus:border-accent"
           />
-          <select
-            value={filter}
-            onChange={(event) => setFilter(event.target.value as RunFilter)}
-            className="rounded-2xl border border-line bg-[#f9fbfd] px-4 py-3 text-sm outline-none transition focus:border-accent"
-          >
-            <option value="all">{t("dashboardAll")}</option>
-            <option value="queued">{t("runStatusQueued")}</option>
-            <option value="planning">{t("runStatusPlanning")}</option>
-            <option value="running">{t("runStatusRunning")}</option>
-            <option value="completed">{t("runStatusCompleted")}</option>
-            <option value="failed">{t("runStatusFailed")}</option>
-          </select>
+          <div className={cn("grid gap-3", isAdmin ? "lg:grid-cols-2" : undefined)}>
+            {isAdmin ? (
+              <select
+                value={selectedOwnerId ?? ""}
+                onChange={(event) => {
+                  const owner = event.target.value;
+                  router.push(owner ? `/dashboard?owner=${owner}` : "/dashboard");
+                }}
+                className="rounded-2xl border border-line bg-[#f9fbfd] px-4 py-3 text-sm outline-none transition focus:border-accent"
+              >
+                <option value="">全部用户</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.displayName} (@{user.username})
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            <select
+              value={filter}
+              onChange={(event) => setFilter(event.target.value as RunFilter)}
+              className="rounded-2xl border border-line bg-[#f9fbfd] px-4 py-3 text-sm outline-none transition focus:border-accent"
+            >
+              <option value="all">{t("dashboardAll")}</option>
+              <option value="queued">{t("runStatusQueued")}</option>
+              <option value="planning">{t("runStatusPlanning")}</option>
+              <option value="running">{t("runStatusRunning")}</option>
+              <option value="completed">{t("runStatusCompleted")}</option>
+              <option value="failed">{t("runStatusFailed")}</option>
+            </select>
+          </div>
         </div>
 
         <div className="mt-5 space-y-3">
@@ -163,6 +194,11 @@ export function DashboardClient({ runs }: { runs: TaskRun[] }) {
                     <span className="rounded-full bg-white px-2.5 py-1 text-[11px] text-steel">
                       {run.mode}
                     </span>
+                    {isAdmin && run.ownerDisplayName ? (
+                      <span className="rounded-full bg-white px-2.5 py-1 text-[11px] text-steel">
+                        {run.ownerDisplayName}
+                      </span>
+                    ) : null}
                   </div>
                   <p className="mt-3 text-base font-semibold tracking-tight">
                     {run.inputTask}

@@ -249,9 +249,11 @@ function buildConversation(
       content: detail.run.inputTask,
       status: detail.run.status,
       metadata: [
-        detail.run.agentRuntime,
+        detail.run.agentRuntime === "minimax" ? "llm" : detail.run.agentRuntime,
         detail.run.mode,
-        detail.run.llmModelName ?? "n/a"
+        detail.run.agentRuntime === "minimax"
+          ? "LLM runtime"
+          : detail.run.llmModelName ?? "n/a"
       ]
     }
   ];
@@ -682,7 +684,11 @@ export function RunDetailClient({
               <p className="text-xs uppercase tracking-[0.16em] text-steel/70">
                 {t("runMetaModel")}
               </p>
-              <p className="mt-2 font-medium">{detail.run.llmModelName ?? "n/a"}</p>
+              <p className="mt-2 font-medium">
+                {detail.run.agentRuntime === "minimax"
+                  ? "LLM Runtime"
+                  : detail.run.llmModelName ?? "n/a"}
+              </p>
             </div>
             <div className="rounded-2xl bg-mist p-3">
               <p className="text-xs uppercase tracking-[0.16em] text-steel/70">

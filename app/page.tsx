@@ -3,8 +3,8 @@ import { requireSessionUser } from "@/lib/auth/session";
 import { repositories } from "@/lib/persistence/repositories";
 
 export default async function HomePage() {
-  await requireSessionUser("/");
-  const recentRuns = repositories.listRuns().slice(0, 8);
+  const sessionUser = await requireSessionUser("/");
+  const recentRuns = repositories.listRuns({ userId: sessionUser.id }).slice(0, 8);
 
-  return <HomeWorkspace recentRuns={recentRuns} />;
+  return <HomeWorkspace recentRuns={recentRuns} sessionUser={sessionUser} />;
 }

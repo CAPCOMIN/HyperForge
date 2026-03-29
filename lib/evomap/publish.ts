@@ -1,11 +1,11 @@
 import type { CapsulePayload, GenePayload, PublishStatus } from "@/lib/types/domain";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 import { ensureNodeIdentity } from "@/lib/evomap/auth";
 import { createEvoMapClient } from "@/lib/evomap/client";
-import { env } from "@/lib/utils/env";
 
 export async function publishAssets(
   assets: Array<GenePayload | CapsulePayload>,
-  mode = env.EVOMAP_MODE
+  mode = getRuntimeConfig().evomapMode
 ) {
   const client = createEvoMapClient(mode);
   const { senderId, nodeSecret } = await ensureNodeIdentity("master", mode);
@@ -21,6 +21,6 @@ export function toDraftPublishStatus(mode: "mock" | "live", success: boolean): P
 }
 
 export function toEvoMapAssetUrl(assetId: string) {
-  const baseUrl = env.EVOMAP_BASE_URL.replace(/\/$/, "");
+  const baseUrl = getRuntimeConfig().evomapBaseUrl.replace(/\/$/, "");
   return `${baseUrl}/asset/${encodeURIComponent(assetId)}`;
 }

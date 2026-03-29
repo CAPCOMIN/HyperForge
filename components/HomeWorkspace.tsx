@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { TaskRun } from "@/lib/types/domain";
+import type { SessionUser, TaskRun } from "@/lib/types/domain";
 import { TaskInputForm } from "@/components/TaskInputForm";
 import { useLocale } from "@/components/providers/locale-provider";
 import { cn } from "@/lib/utils/cn";
@@ -45,7 +45,13 @@ function statusLabel(
   return t("runStatusQueued");
 }
 
-export function HomeWorkspace({ recentRuns }: { recentRuns: TaskRun[] }) {
+export function HomeWorkspace({
+  recentRuns,
+  sessionUser
+}: {
+  recentRuns: TaskRun[];
+  sessionUser: SessionUser;
+}) {
   const { t, formatDateTime } = useLocale();
 
   return (
@@ -61,6 +67,16 @@ export function HomeWorkspace({ recentRuns }: { recentRuns: TaskRun[] }) {
           <p className="mt-4 text-sm leading-7 text-steel">
             {t("homeSubheading")}
           </p>
+          <div className="mt-5 flex flex-wrap gap-2 text-xs">
+            <span className="rounded-full bg-mist px-3 py-1.5 text-steel">
+              {sessionUser.role === "admin"
+                ? t("quotaUnlimited")
+                : `${t("quotaLabel")} ${sessionUser.quota.used}/${sessionUser.quota.limit ?? "∞"}`}
+            </span>
+            <span className="rounded-full bg-white px-3 py-1.5 text-steel">
+              @{sessionUser.username}
+            </span>
+          </div>
         </section>
 
         <section className="rounded-[28px] border border-white/70 bg-white/80 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)] backdrop-blur-xl">
@@ -135,7 +151,12 @@ export function HomeWorkspace({ recentRuns }: { recentRuns: TaskRun[] }) {
           ))}
         </div>
 
-        <TaskInputForm autoFocus className="min-h-[620px]" />
+        <TaskInputForm
+          autoFocus
+          className="min-h-[620px]"
+          quota={sessionUser.quota}
+          isAdmin={sessionUser.role === "admin"}
+        />
       </section>
     </div>
   );

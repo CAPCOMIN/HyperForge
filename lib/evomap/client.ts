@@ -1,5 +1,5 @@
 import { createSecret } from "@/lib/utils/ids";
-import { env } from "@/lib/utils/env";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 import { buildEnvelope, unwrapEvoMapResponse } from "@/lib/evomap/envelope";
 import type {
   EvoMapClient,
@@ -145,7 +145,7 @@ function createMockClient(): EvoMapClient {
 }
 
 function createLiveClient(): EvoMapClient {
-  const baseUrl = env.EVOMAP_BASE_URL.replace(/\/$/, "");
+  const baseUrl = getRuntimeConfig().evomapBaseUrl.replace(/\/$/, "");
 
   return {
     mode: "live",
@@ -212,7 +212,9 @@ function createLiveClient(): EvoMapClient {
       };
     },
     async fetch(input, auth): Promise<FetchResult> {
-      const senderId = String(input.sender_id ?? env.EVOMAP_NODE_ID ?? "node_fetch");
+      const senderId = String(
+        input.sender_id ?? getRuntimeConfig().evomapNodeId ?? "node_fetch"
+      );
       const data = unwrapEvoMapResponse<Record<string, unknown>>(
         await postJson(
           `${baseUrl}/a2a/fetch`,
@@ -231,7 +233,9 @@ function createLiveClient(): EvoMapClient {
       };
     },
     async validate(input, auth) {
-      const senderId = String(input.sender_id ?? env.EVOMAP_NODE_ID ?? "node_validate");
+      const senderId = String(
+        input.sender_id ?? getRuntimeConfig().evomapNodeId ?? "node_validate"
+      );
       return unwrapEvoMapResponse<Record<string, unknown>>(
         await postJson(
           `${baseUrl}/a2a/validate`,
@@ -338,6 +342,6 @@ function createLiveClient(): EvoMapClient {
   };
 }
 
-export function createEvoMapClient(mode = env.EVOMAP_MODE) {
+export function createEvoMapClient(mode = getRuntimeConfig().evomapMode) {
   return mode === "live" ? createLiveClient() : createMockClient();
 }

@@ -1,10 +1,62 @@
 export type DemoMode = "mock" | "live";
 export type AgentRuntime = "mock" | "minimax";
+export type UserRole = "admin" | "user";
+export type UserStatus = "active" | "disabled";
 
 export type AgentRole = "master" | "analyst" | "builder" | "validator";
 export type TaskRunStatus = "queued" | "planning" | "running" | "completed" | "failed";
 export type SubTaskStatus = "pending" | "running" | "completed" | "failed";
 export type PublishStatus = "local-only" | "published" | "mock-published" | "failed";
+
+export interface UserAccount {
+  id: string;
+  username: string;
+  displayName: string;
+  role: UserRole;
+  status: UserStatus;
+  quotaLimit: number | null;
+  passwordVersion: number;
+  createdAt: string;
+  updatedAt: string;
+  lastLoginAt: string | null;
+}
+
+export interface UserQuotaSnapshot {
+  limit: number | null;
+  used: number;
+  remaining: number | null;
+}
+
+export interface SessionUser {
+  id: string;
+  username: string;
+  displayName: string;
+  role: UserRole;
+  status: UserStatus;
+  quota: UserQuotaSnapshot;
+}
+
+export interface AppSettings {
+  minimaxApiKey: string | null;
+  evomapApiKey: string | null;
+  evomapNodeId: string | null;
+  evomapNodeSecret: string | null;
+  updatedAt: string | null;
+  updatedByUserId: string | null;
+}
+
+export interface InviteCode {
+  id: string;
+  code: string;
+  note: string | null;
+  createdByUserId: string;
+  maxUses: number;
+  usedCount: number;
+  status: "active" | "disabled" | "exhausted";
+  expiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface AgentNode {
   id: string;
@@ -19,6 +71,9 @@ export interface AgentNode {
 
 export interface TaskRun {
   id: string;
+  userId: string;
+  ownerUsername?: string | null;
+  ownerDisplayName?: string | null;
   inputTask: string;
   mode: DemoMode;
   agentRuntime: AgentRuntime;

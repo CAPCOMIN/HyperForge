@@ -38,7 +38,7 @@ export function AgentStatusPanel({
                 </span>
                 {"llmModelName" in execution.artifacts ? (
                   <span className="rounded-full bg-white px-3 py-1">
-                    Model: {String(execution.artifacts.llmModelName)}
+                    Model: LLM Runtime
                   </span>
                 ) : null}
               </div>

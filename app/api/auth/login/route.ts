@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
+  authenticateUser,
   createSessionCookieValue,
-  getDefaultSessionUser,
   getSessionCookieName,
-  resolveSafeNextPath,
-  validateLoginCredentials
+  resolveSafeNextPath
 } from "@/lib/auth/session";
+import { repositories } from "@/lib/persistence/repositories";
+import { nowIso } from "@/lib/utils/time";
 
 const loginSchema = z.object({
   username: z.string().trim().min(1),
@@ -26,27 +27,36 @@ export async function POST(request: Request) {
   }
 
   const { username, password, next } = parsed.data;
+  const user = authenticateUser(username, password);
 
-  if (!validateLoginCredentials(username, password)) {
+  if (!user) {
     return NextResponse.json(
       { error: "invalid_credentials" },
       { status: 401 }
     );
   }
 
-  const user = getDefaultSessionUser();
+  const timestamp = nowIso();
+  repositories.touchUserLogin(user.id, timestamp);
+  const secure = new URL(request.url).protocol === "https:";
+
   const response = NextResponse.json({
     ok: true,
-    user,
+    user: {
+      id: user.id,
+      username: user.username,
+      displayName: user.displayName,
+      role: user.role
+    },
     next: resolveSafeNextPath(next)
   });
 
   response.cookies.set({
     name: getSessionCookieName(),
-    value: createSessionCookieValue(user.username),
+    value: createSessionCookieValue(user),
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure,
     path: "/",
     maxAge: 60 * 60 * 24 * 7
   });

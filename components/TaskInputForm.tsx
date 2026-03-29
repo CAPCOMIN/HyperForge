@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale } from "@/components/providers/locale-provider";
+import type { UserQuotaSnapshot } from "@/lib/types/domain";
 import { cn } from "@/lib/utils/cn";
 
 type RuntimeStatus =
@@ -32,10 +33,14 @@ const initialRuntimeStatus: RuntimeStatus = {
 
 export function TaskInputForm({
   className,
-  autoFocus = false
+  autoFocus = false,
+  quota,
+  isAdmin = false
 }: {
   className?: string;
   autoFocus?: boolean;
+  quota?: UserQuotaSnapshot;
+  isAdmin?: boolean;
 }) {
   const router = useRouter();
   const { t, formatDateTime } = useLocale();
@@ -130,6 +135,8 @@ export function TaskInputForm({
   const minimaxBlocked =
     agentRuntime === "minimax" &&
     (runtimeStatus.state === "checking" || runtimeStatus.state === "error");
+  const quotaBlocked =
+    !isAdmin && quota?.limit !== null && quota ? quota.used >= quota.limit : false;
 
   const statusTone = useMemo(() => {
     if (agentRuntime === "mock") {
@@ -187,14 +194,16 @@ export function TaskInputForm({
             >
               {statusTone.label}
             </span>
-            {runtimeStatus.model ? (
-              <span className="rounded-full bg-mist px-3 py-1 text-steel">
-                {runtimeStatus.model}
-              </span>
-            ) : null}
             {runtimeStatus.checkedAt ? (
               <span className="text-steel/70">
                 {formatDateTime(runtimeStatus.checkedAt)}
+              </span>
+            ) : null}
+            {quota ? (
+              <span className="rounded-full bg-white px-3 py-1 text-steel">
+                {isAdmin
+                  ? t("quotaUnlimited")
+                  : `${t("quotaLabel")} ${quota.used}/${quota.limit ?? "∞"}`}
               </span>
             ) : null}
           </div>
@@ -289,18 +298,25 @@ export function TaskInputForm({
             />
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line/60 pt-3">
               <div className="text-xs text-steel/75">
-                {agentRuntime === "minimax"
+                {quotaBlocked
+                  ? t("quotaExceeded")
+                  : agentRuntime === "minimax"
                   ? runtimeStatus.message ?? t("composerHealthChecking")
                   : t("composerHealthMock")}
               </div>
               <button
                 type="button"
-                disabled={isPending || minimaxBlocked}
+                disabled={isPending || minimaxBlocked || quotaBlocked}
                 onClick={() => {
                   setError(null);
 
                   if (task.trim().length < 12) {
                     setError(t("composerShortTask"));
+                    return;
+                  }
+
+                  if (quotaBlocked) {
+                    setError(t("quotaExceeded"));
                     return;
                   }
 
@@ -352,7 +368,7 @@ export function TaskInputForm({
                 }}
                 className={cn(
                   "inline-flex min-w-[168px] items-center justify-center rounded-full px-4 py-3 text-sm font-semibold transition",
-                  isPending || minimaxBlocked
+                  isPending || minimaxBlocked || quotaBlocked
                     ? "cursor-not-allowed bg-slate-300 text-slate-600"
                     : "bg-ink text-white hover:bg-slate-900"
                 )}

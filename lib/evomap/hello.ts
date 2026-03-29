@@ -1,6 +1,6 @@
 import { ensureNodeIdentity } from "@/lib/evomap/auth";
-import { env } from "@/lib/utils/env";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 
-export async function helloNode(mode = env.EVOMAP_MODE) {
+export async function helloNode(mode = getRuntimeConfig().evomapMode) {
   return ensureNodeIdentity("master", mode);
 }

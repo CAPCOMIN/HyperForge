@@ -1,16 +1,32 @@
 import { NextResponse } from "next/server";
+import { ensureRunQuota, getSessionUser } from "@/lib/auth/session";
+import { getRuntimeConfig } from "@/lib/config/runtime";
 import { getMiniMaxAvailability } from "@/lib/llm/minimax";
 import { demoRunRequestSchema } from "@/lib/types/api";
 import { startDemoTask } from "@/lib/orchestration/task-runner";
-import { env } from "@/lib/utils/env";
 
 export async function POST(request: Request) {
+  const sessionUser = await getSessionUser();
+
+  if (!sessionUser) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const body = await request.json();
   const input = demoRunRequestSchema.parse(body);
+  const runtimeConfig = getRuntimeConfig();
 
-  if (input.agentRuntime === "minimax" && !env.MINIMAX_API_KEY) {
+  try {
+    ensureRunQuota(sessionUser);
+  } catch {
     return NextResponse.json(
-      { error: "MINIMAX_API_KEY is missing. Minimax runtime is unavailable." },
+      { error: "quota_exceeded", message: "Conversation quota reached for this account." },
+      { status: 403 }
+    );
+  }
+
+  if (input.agentRuntime === "minimax" && !runtimeConfig.minimaxApiKey) {
+    return NextResponse.json(
+      { error: "The LLM API key is missing. The LLM runtime is unavailable." },
       { status: 400 }
     );
   }
@@ -31,7 +47,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const result = startDemoTask(input.task, input.mode, input.agentRuntime);
+  const result = startDemoTask(sessionUser, input.task, input.mode, input.agentRuntime);
 
   return NextResponse.json({
     runId: result.runId,

@@ -1,4 +1,38 @@
 export const schemaSql = `
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  username TEXT NOT NULL UNIQUE,
+  display_name TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  role TEXT NOT NULL,
+  status TEXT NOT NULL,
+  quota_limit INTEGER,
+  password_version INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  last_login_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT,
+  updated_at TEXT NOT NULL,
+  updated_by_user_id TEXT
+);
+
+CREATE TABLE IF NOT EXISTS invite_codes (
+  id TEXT PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE,
+  note TEXT,
+  created_by_user_id TEXT NOT NULL,
+  max_uses INTEGER NOT NULL DEFAULT 1,
+  used_count INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL,
+  expires_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS agent_nodes (
   id TEXT PRIMARY KEY,
   role TEXT NOT NULL UNIQUE,
@@ -12,6 +46,7 @@ CREATE TABLE IF NOT EXISTS agent_nodes (
 
 CREATE TABLE IF NOT EXISTS task_runs (
   id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
   input_task TEXT NOT NULL,
   mode TEXT NOT NULL,
   agent_runtime TEXT NOT NULL DEFAULT 'mock',

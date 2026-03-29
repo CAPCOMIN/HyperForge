@@ -18,6 +18,9 @@ const envSchema = z.object({
   AUTH_BOOTSTRAP_USERNAME: z.string().trim().min(1).optional(),
   AUTH_BOOTSTRAP_PASSWORD: z.string().min(1).optional(),
   AUTH_BOOTSTRAP_DISPLAY_NAME: z.string().trim().min(1).optional(),
+  AUTH_DEMO_USERNAME: z.string().trim().min(1).optional(),
+  AUTH_DEMO_PASSWORD: z.string().min(1).optional(),
+  AUTH_DEMO_DISPLAY_NAME: z.string().trim().min(1).optional(),
   AUTH_SESSION_SECRET: z.string().min(16).optional(),
   DATABASE_URL: z.string().default("file:./data/hyperforge.db")
 });
@@ -37,6 +40,9 @@ export const env = envSchema.parse({
   AUTH_BOOTSTRAP_USERNAME: process.env.AUTH_BOOTSTRAP_USERNAME,
   AUTH_BOOTSTRAP_PASSWORD: process.env.AUTH_BOOTSTRAP_PASSWORD,
   AUTH_BOOTSTRAP_DISPLAY_NAME: process.env.AUTH_BOOTSTRAP_DISPLAY_NAME,
+  AUTH_DEMO_USERNAME: process.env.AUTH_DEMO_USERNAME,
+  AUTH_DEMO_PASSWORD: process.env.AUTH_DEMO_PASSWORD,
+  AUTH_DEMO_DISPLAY_NAME: process.env.AUTH_DEMO_DISPLAY_NAME,
   AUTH_SESSION_SECRET: process.env.AUTH_SESSION_SECRET,
   DATABASE_URL: process.env.DATABASE_URL
 });

@@ -13,7 +13,7 @@ import { buildGeneDraft } from "@/lib/genes/gene-builder";
 import { composeRecipeDraft } from "@/lib/genes/recipe-composer";
 import { writeRunDeliverables } from "@/lib/deliverables";
 import { createRecipeAndPublish, expressRecipe } from "@/lib/evomap/recipe";
-import { publishAssets, toDraftPublishStatus } from "@/lib/evomap/publish";
+import { publishAssets, toDraftPublishStatus, toEvoMapAssetUrl } from "@/lib/evomap/publish";
 import { sanitizeTaskPlan, sortSubtasksByDependency } from "@/lib/orchestration/task-dag";
 import { assertRunTransition } from "@/lib/orchestration/run-state-machine";
 import { repositories } from "@/lib/persistence/repositories";
@@ -326,12 +326,39 @@ async function executeDemoRun(
       capsuleDrafts.push(capsule);
 
       try {
-        await publishAssets([gene.payload, capsule.payload], mode);
+        const publishResult = await publishAssets([gene.payload, capsule.payload], mode);
         gene.publishStatus = toDraftPublishStatus(mode, true);
         capsule.publishStatus = toDraftPublishStatus(mode, true);
-      } catch {
+        const publishedGene = publishResult.publishedAssets.find((asset) => asset.type === "Gene");
+        const publishedCapsule = publishResult.publishedAssets.find((asset) => asset.type === "Capsule");
+        repositories.addRunEvent({
+          id: createId("event"),
+          runId,
+          title: "Assets published",
+          detail: [
+            publishedGene?.assetId
+              ? `Gene: ${toEvoMapAssetUrl(publishedGene.assetId)}`
+              : null,
+            publishedCapsule?.assetId
+              ? `Capsule: ${toEvoMapAssetUrl(publishedCapsule.assetId)}`
+              : null
+          ]
+            .filter(Boolean)
+            .join(" | "),
+          createdAt: nowIso()
+        });
+      } catch (error) {
         gene.publishStatus = "failed";
         capsule.publishStatus = "failed";
+        const detail =
+          error instanceof Error ? error.message : "Unknown EvoMap publish error.";
+        repositories.addRunEvent({
+          id: createId("event"),
+          runId,
+          title: "Assets publish failed",
+          detail,
+          createdAt: nowIso()
+        });
       }
 
       repositories.updateGeneDraft(gene);

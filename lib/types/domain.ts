@@ -65,13 +65,13 @@ export interface GenePayload {
   category: "repair" | "optimize" | "innovate" | "regulatory";
   summary: string;
   signals_match: string[];
-  preconditions: string[];
   strategy: string[];
-  constraints: {
+  preconditions?: string[];
+  constraints?: {
     rules: string[];
     notes?: string;
   };
-  validation: string[];
+  validation?: string[];
   parent?: string;
   domain?: string;
   model_name?: string;
@@ -92,15 +92,15 @@ export interface CapsulePayload {
   outcome: {
     status: "success" | "failed";
     score: number;
-    notes: string;
+    notes?: string;
   };
   success_streak: number;
   env_fingerprint: Record<string, string>;
-  source_type: "generated" | "reused" | "reference";
+  source_type?: "generated" | "reused" | "reference";
   reused_asset_id?: string;
   parent?: string;
   content: string;
-  strategy_steps: string[];
+  strategy_steps?: string[];
   model_name?: string;
   asset_id: string;
 }

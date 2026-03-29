@@ -16,7 +16,7 @@ describe("computeAssetId", () => {
     expect(a).toBe(b);
   });
 
-  it("ignores asset_id and model_name", () => {
+  it("ignores asset_id only", () => {
     const a = computeAssetId({
       type: "Gene",
       summary: "example",
@@ -25,9 +25,25 @@ describe("computeAssetId", () => {
     });
     const b = computeAssetId({
       type: "Gene",
-      summary: "example"
+      summary: "example",
+      model_name: "gpt-5"
     });
 
     expect(a).toBe(b);
+  });
+
+  it("includes model_name in the hash input", () => {
+    const a = computeAssetId({
+      type: "Gene",
+      summary: "example",
+      model_name: "gpt-5"
+    });
+    const b = computeAssetId({
+      type: "Gene",
+      summary: "example",
+      model_name: "MiniMax-M2.5"
+    });
+
+    expect(a).not.toBe(b);
   });
 });

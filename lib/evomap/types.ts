@@ -58,7 +58,7 @@ export interface EvoMapClient {
   mode: "mock" | "live";
   hello(input: Record<string, unknown>): Promise<HelloResult>;
   heartbeat(input: Record<string, unknown>, auth?: string): Promise<Record<string, unknown>>;
-  publish(input: { assets: unknown[] }, auth: string): Promise<PublishResult>;
+  publish(input: { senderId: string; assets: unknown[] }, auth: string): Promise<PublishResult>;
   fetch(input: Record<string, unknown>, auth?: string): Promise<FetchResult>;
   validate?(input: Record<string, unknown>, auth: string): Promise<Record<string, unknown>>;
   createRecipe(input: RecipeCreateInput, auth: string): Promise<RecipeResult>;

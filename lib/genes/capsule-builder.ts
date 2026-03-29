@@ -2,23 +2,6 @@ import type { AgentExecution, AgentGeneCandidate, CapsuleDraft, CapsulePayload, 
 import { createId } from "@/lib/utils/ids";
 import { computeAssetId } from "@/lib/evomap/hashing";
 
-function resolveModelName(execution: AgentExecution) {
-  const runtimeProvider =
-    typeof execution.artifacts.runtimeProvider === "string"
-      ? execution.artifacts.runtimeProvider
-      : null;
-  const llmModelName =
-    typeof execution.artifacts.llmModelName === "string"
-      ? execution.artifacts.llmModelName
-      : null;
-
-  if (runtimeProvider === "minimax" && llmModelName) {
-    return llmModelName;
-  }
-
-  return undefined;
-}
-
 export function buildCapsuleDraft(params: {
   runId: string;
   sourceSubtaskId: string;
@@ -39,8 +22,7 @@ export function buildCapsuleDraft(params: {
     },
     outcome: {
       status: params.execution.status === "completed" ? "success" : "failed",
-      score: params.execution.status === "completed" ? 0.9 : 0.3,
-      notes: params.execution.summary
+      score: params.execution.status === "completed" ? 0.9 : 0.3
     },
     success_streak: params.execution.status === "completed" ? 1 : 0,
     env_fingerprint: {
@@ -48,10 +30,7 @@ export function buildCapsuleDraft(params: {
       platform: process.platform,
       arch: process.arch
     },
-    source_type: "generated",
-    content: params.candidate.content,
-    strategy_steps: params.candidate.strategy,
-    model_name: resolveModelName(params.execution)
+    content: params.candidate.content
   };
 
   const assetId = computeAssetId(payloadWithoutAssetId);

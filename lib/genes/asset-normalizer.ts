@@ -7,21 +7,19 @@ function stripMetadata(value: unknown): unknown {
     const result: Record<string, unknown> = {};
 
     for (const key of Object.keys(value as Record<string, unknown>)) {
-      if (key === "asset_id" || key === "model_name") {
+      if (key === "asset_id") {
         continue;
       }
 
       const normalized = stripMetadata((value as Record<string, unknown>)[key]);
-      if (normalized !== undefined) {
-        result[key] = normalized;
-      }
+      result[key] = normalized;
     }
 
     return result;
   }
 
   if (value === undefined) {
-    return undefined;
+    return null;
   }
 
   return value;

@@ -25,12 +25,42 @@ async function postJson(
     body: JSON.stringify(body)
   });
 
-  const data = (await response.json()) as Record<string, unknown>;
+  const rawText = await response.text();
+  let data: Record<string, unknown>;
+
+  try {
+    data = rawText ? (JSON.parse(rawText) as Record<string, unknown>) : {};
+  } catch {
+    data = { raw: rawText };
+  }
 
   if (!response.ok) {
     throw new Error(
       `EvoMap request failed (${response.status}): ${JSON.stringify(data)}`
     );
+  }
+
+  return data;
+}
+
+async function getJson(url: string, auth?: string): Promise<Record<string, unknown>> {
+  const response = await fetch(url, {
+    headers: {
+      ...(auth ? { Authorization: `Bearer ${auth}` } : {})
+    }
+  });
+
+  const rawText = await response.text();
+  let data: Record<string, unknown>;
+
+  try {
+    data = rawText ? (JSON.parse(rawText) as Record<string, unknown>) : {};
+  } catch {
+    data = { raw: rawText };
+  }
+
+  if (!response.ok) {
+    throw new Error(`EvoMap request failed (${response.status}): ${JSON.stringify(data)}`);
   }
 
   return data;
@@ -155,8 +185,7 @@ function createLiveClient(): EvoMapClient {
       );
     },
     async publish(input, auth): Promise<PublishResult> {
-      const firstAsset = (input.assets[0] ?? {}) as Record<string, unknown>;
-      const senderId = String(firstAsset.sender_id ?? "");
+      const senderId = String(input.senderId);
       const data = unwrapEvoMapResponse<Record<string, unknown>>(
         await postJson(
           `${baseUrl}/a2a/publish`,
@@ -234,7 +263,11 @@ function createLiveClient(): EvoMapClient {
 
       return {
         status: String(data.status ?? "draft-created"),
-        recipeId: String(data.recipe_id ?? data.id)
+        recipeId: String(
+          data.recipe_id ??
+            data.id ??
+            ((data.recipe as Record<string, unknown> | undefined)?.id ?? "")
+        )
       };
     },
     async publishRecipe(recipeId, senderId, auth): Promise<RecipeResult> {
@@ -250,11 +283,45 @@ function createLiveClient(): EvoMapClient {
       };
     },
     async expressRecipe(recipeId, senderId, ttl, auth): Promise<OrganismResult> {
-      const data = await postJson(
-        `${baseUrl}/a2a/recipe/${recipeId}/express`,
-        { sender_id: senderId, ttl },
-        auth
-      );
+      let data: Record<string, unknown>;
+
+      try {
+        data = await postJson(
+          `${baseUrl}/a2a/recipe/${recipeId}/express`,
+          { sender_id: senderId, ttl },
+          auth
+        );
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message.includes("EvoMap request failed (504)")
+        ) {
+          const active = await getJson(
+            `${baseUrl}/a2a/organism/active?executor_node_id=${encodeURIComponent(senderId)}`,
+            auth
+          );
+          const organisms = Array.isArray(active.organisms)
+            ? (active.organisms as Array<Record<string, unknown>>)
+            : [];
+          const matched = organisms.find((organism) => String(organism.recipe_id) === recipeId);
+
+          if (matched) {
+            return {
+              organism: {
+                id: String(matched.id ?? ""),
+                recipe_id: String(matched.recipe_id ?? recipeId),
+                status: String(matched.status ?? "assembling"),
+                ttl: Number(matched.ttl ?? ttl),
+                genes_expressed: Number(matched.genes_expressed ?? 0),
+                genes_total_count: Number(matched.genes_total_count ?? 0),
+                born_at: String(matched.born_at ?? new Date().toISOString())
+              }
+            };
+          }
+        }
+
+        throw error;
+      }
 
       return {
         organism: (data.organism as OrganismResult["organism"]) ?? {

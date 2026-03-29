@@ -48,5 +48,7 @@ describe("buildCapsuleDraft", () => {
     expect(capsule.payload.type).toBe("Capsule");
     expect(capsule.payload.gene).toBe(gene.assetId);
     expect(capsule.assetId.startsWith("sha256:")).toBe(true);
+    expect(capsule.payload.outcome.notes).toBeUndefined();
+    expect(capsule.payload.content.length).toBeGreaterThan(50);
   });
 });

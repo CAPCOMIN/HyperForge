@@ -34,5 +34,7 @@ describe("buildGeneDraft", () => {
     expect(gene.assetId.startsWith("sha256:")).toBe(true);
     expect(gene.payload.type).toBe("Gene");
     expect(gene.payload.summary).toBe("Reusable analysis pattern");
+    expect(gene.payload.strategy).toEqual(["Analyze scope", "Extract signals"]);
+    expect(gene.payload.validation).toBeUndefined();
   });
 });

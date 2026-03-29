@@ -2,23 +2,6 @@ import type { AgentExecution, AgentGeneCandidate, GeneDraft, GenePayload } from 
 import { createId } from "@/lib/utils/ids";
 import { computeAssetId } from "@/lib/evomap/hashing";
 
-function resolveModelName(execution: AgentExecution) {
-  const runtimeProvider =
-    typeof execution.artifacts.runtimeProvider === "string"
-      ? execution.artifacts.runtimeProvider
-      : null;
-  const llmModelName =
-    typeof execution.artifacts.llmModelName === "string"
-      ? execution.artifacts.llmModelName
-      : null;
-
-  if (runtimeProvider === "minimax" && llmModelName) {
-    return llmModelName;
-  }
-
-  return undefined;
-}
-
 export function buildGeneDraft(params: {
   runId: string;
   sourceSubtaskId: string;
@@ -31,12 +14,7 @@ export function buildGeneDraft(params: {
     category: params.candidate.category,
     summary: params.candidate.summary,
     signals_match: params.candidate.signalsMatch,
-    preconditions: params.candidate.preconditions,
-    strategy: params.candidate.strategy,
-    constraints: params.candidate.constraints,
-    validation: params.candidate.validation,
-    domain: "software_engineering",
-    model_name: resolveModelName(params.execution)
+    strategy: params.candidate.strategy
   };
 
   const assetId = computeAssetId(payloadWithoutAssetId);

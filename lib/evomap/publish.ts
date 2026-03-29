@@ -8,8 +8,8 @@ export async function publishAssets(
   mode = env.EVOMAP_MODE
 ) {
   const client = createEvoMapClient(mode);
-  const { nodeSecret } = await ensureNodeIdentity("master", mode);
-  return client.publish({ assets }, nodeSecret);
+  const { senderId, nodeSecret } = await ensureNodeIdentity("master", mode);
+  return client.publish({ senderId, assets }, nodeSecret);
 }
 
 export function toDraftPublishStatus(mode: "mock" | "live", success: boolean): PublishStatus {
@@ -18,4 +18,9 @@ export function toDraftPublishStatus(mode: "mock" | "live", success: boolean): P
   }
 
   return mode === "live" ? "published" : "mock-published";
+}
+
+export function toEvoMapAssetUrl(assetId: string) {
+  const baseUrl = env.EVOMAP_BASE_URL.replace(/\/$/, "");
+  return `${baseUrl}/asset/${encodeURIComponent(assetId)}`;
 }
